@@ -1,4 +1,4 @@
-This is a simple script app for exporting large number of emails log from hornetsecurity
+## This is a simple script app for exporting large number of emails log from hornetsecurity ##
 
 - install python
 
@@ -6,4 +6,4 @@ This is a simple script app for exporting large number of emails log from hornet
 
 - access at localhost:5000
 
-## this is coded by chatgpt ##
+DISCLAIMER: this is coded by chatgpt
