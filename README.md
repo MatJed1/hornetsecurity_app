@@ -5,3 +5,5 @@ This is a simple script app for exporting large number of emails log from hornet
 - pip install flask requests
 
 - access at localhost:5000
+
+## this is coded by chatgpt ##
