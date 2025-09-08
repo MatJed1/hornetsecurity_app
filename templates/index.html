@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hornetsecurity Email Export App</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input { padding: 8px; width: 300px; border: 1px solid #ccc; }
+    button { padding: 10px 20px; margin-right: 10px; background: #007bff; color: #fff; border: none; cursor: pointer; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .result { margin-top: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+    .error { color: #d32f2f; background: #ffebee; border-color: #d32f2f; }
+    .success { color: #2e7d32; background: #e8f5e9; border-color: #2e7d32; }
+    .info { color: #1565c0; background: #e3f2fd; border-color: #1565c0; }
+    .section { margin-bottom: 30px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; }
+    .logbox { margin-top: 12px; background: #0b1020; color: #d6e1ff; border-radius: 6px; padding: 10px; }
+    .log { max-height: 280px; overflow-y: auto; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+  <h1>Hornetsecurity Email Export App</h1>
+
+  <div class="section">
+    <h2>Step 1: API Authentication</h2>
+    <div class="form-group">
+      <label for="api_token">API Token:</label>
+      <input type="password" id="api_token" placeholder="Enter your API token" oninput="checkFormState()">
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Step 2: Get Object ID</h2>
+    <div class="form-group">
+      <label for="user_name">User Email or Domain Name:</label>
+      <input type="text" id="user_name" placeholder="user@domain.com" oninput="checkFormState()">
+    </div>
+    <button id="getObjectIdBtn" onclick="getObjectId()" disabled>Get Object ID</button>
+    <div id="objectIdResult" class="result"></div>
+  </div>
+
+  <div class="section">
+    <h2>Step 3: Export Emails</h2>
+    <div class="form-group">
+      <label for="object_id">Object ID:</label>
+      <input type="text" id="object_id" readonly>
+    </div>
+    <input type="hidden" id="user_email_hidden">
+
+    <div class="form-group">
+      <label for="date_from">Date From (YYYY-MM-DDTHH:MM:SSZ):</label>
+      <input type="text" id="date_from" value="2025-01-01T00:00:00Z" oninput="checkExportState()">
+    </div>
+    <div class="form-group">
+      <label for="date_to">Date To (YYYY-MM-DDTHH:MM:SSZ):</label>
+      <input type="text" id="date_to" value="2025-12-31T23:59:59Z" oninput="checkExportState()">
+    </div>
+
+    <div class="form-group">
+      <label for="user_email_filter">Filter by Email (optional):</label>
+      <input type="text" id="user_email_filter" placeholder="someone@domain.com">
+    </div>
+
+    <div class="form-group">
+      <label>Rate-limit friendly options</label>
+      <div>
+        <label>Throttle between requests (ms): <input type="number" id="throttle_ms" value="300" style="width:120px"></label>
+        <label style="margin-left:16px">Max retries: <input type="number" id="max_retries" value="6" style="width:80px"></label>
+      </div>
+    </div>
+
+    <button id="exportSingleBtn" onclick="exportEmails()" disabled>Download CSV (single)</button>
+    <button id="exportDailySSEBtn" onclick="startDailyExportWithLogs()" disabled>Daily Export (ZIP) – show progress</button>
+
+    <div id="exportResult" class="result"></div>
+
+    <div id="progressBox" class="logbox" style="display:none">
+      <div><strong>Progress log</strong></div>
+      <div id="log" class="log"></div>
+      <div id="downloadLink" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentUserEmail = '';
+
+    function checkFormState() {
+      const apiToken = document.getElementById('api_token').value;
+      const userName = document.getElementById('user_name').value;
+      document.getElementById('getObjectIdBtn').disabled = !(apiToken && userName);
+    }
+    function checkExportState() {
+      const apiToken = document.getElementById('api_token').value;
+      const objectId = document.getElementById('object_id').value;
+      const dateFrom = document.getElementById('date_from').value;
+      const dateTo = document.getElementById('date_to').value;
+      const ready = apiToken && objectId && dateFrom && dateTo;
+      document.getElementById('exportSingleBtn').disabled = !ready;
+      document.getElementById('exportDailySSEBtn').disabled = !ready;
+    }
+
+    function getObjectId() {
+      const apiToken = document.getElementById('api_token').value;
+      const userName = document.getElementById('user_name').value;
+      const resultDiv = document.getElementById('objectIdResult');
+      resultDiv.className = 'result info'; resultDiv.textContent = 'Fetching object ID…';
+
+      const formData = new FormData();
+      formData.append('api_token', apiToken);
+      formData.append('user_name', userName);
+
+      fetch('/get_object_id', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            resultDiv.className = 'result error';
+            resultDiv.textContent = 'Error: ' + data.error;
+          } else {
+            currentUserEmail = data.user_email || userName;
+            document.getElementById('user_email_hidden').value = currentUserEmail;
+            document.getElementById('object_id').value = data.object_id;
+            resultDiv.className = 'result success';
+            resultDiv.innerHTML = `<p><strong>Success:</strong> ${data.success}</p><p><strong>Object ID:</strong> ${data.object_id}</p>`;
+            checkExportState();
+          }
+        })
+        .catch(err => {
+          resultDiv.className = 'result error';
+          resultDiv.textContent = 'Error: ' + err;
+        });
+    }
+
+    // Single CSV (kept)
+    function exportEmails() {
+      const apiToken = document.getElementById('api_token').value;
+      const objectId = document.getElementById('object_id').value;
+      const dateFrom = document.getElementById('date_from').value;
+      const dateTo = document.getElementById('date_to').value;
+      const userEmailFilter = document.getElementById('user_email_filter').value;
+      const resultDiv = document.getElementById('exportResult');
+      resultDiv.className = 'result info';
+      resultDiv.textContent = 'Preparing CSV download…';
+
+      const formData = new FormData();
+      formData.append('api_token', apiToken);
+      formData.append('object_id', objectId);
+      formData.append('user_email', currentUserEmail);
+      formData.append('date_from', dateFrom);
+      formData.append('date_to', dateTo);
+      if (userEmailFilter) formData.append('user_email_filter', userEmailFilter);
+
+      fetch('/export_emails', { method: 'POST', body: formData })
+        .then(response => {
+          if (response.ok && response.headers.get('content-type')?.includes('text/csv')) {
+            return response.blob().then(blob => {
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              const fromDateClean = dateFrom.split('T')[0];
+              const toDateClean = dateTo.split('T')[0];
+              const cleanUserEmail = (currentUserEmail || 'all').replace('@','_at_').replace(/\./g,'_');
+              a.href = url; a.download = `email_export_${cleanUserEmail}_${fromDateClean}_${toDateClean}.csv`;
+              a.style.display = 'none'; document.body.appendChild(a); a.click();
+              URL.revokeObjectURL(url);
+              resultDiv.className = 'result success';
+              resultDiv.textContent = 'Success: CSV download started!';
+            });
+          } else {
+            return response.json().then(errorData => {
+              resultDiv.className = 'result error';
+              resultDiv.textContent = 'Error: ' + (errorData.error || 'Unknown error');
+            });
+          }
+        })
+        .catch(err => {
+          resultDiv.className = 'result error';
+          resultDiv.textContent = 'Error: ' + err;
+        });
+    }
+
+    // --------- Daily export with PROGRESS (SSE over fetch stream) ----------
+    function startDailyExportWithLogs() {
+      const apiToken = document.getElementById('api_token').value;
+      const objectId = document.getElementById('object_id').value;
+      const dateFrom = document.getElementById('date_from').value;
+      const dateTo = document.getElementById('date_to').value;
+      const userEmailFilter = document.getElementById('user_email_filter').value;
+      const throttleMs = document.getElementById('throttle_ms').value || '800';
+      const maxRetries = document.getElementById('max_retries').value || '6';
+
+      const box = document.getElementById('progressBox');
+      const log = document.getElementById('log');
+      const linkBox = document.getElementById('downloadLink');
+      box.style.display = 'block'; log.textContent = ''; linkBox.innerHTML = '';
+
+      const formData = new FormData();
+      formData.append('api_token', apiToken);
+      formData.append('object_id', objectId);
+      formData.append('user_email', currentUserEmail);
+      formData.append('date_from', dateFrom);
+      formData.append('date_to', dateTo);
+      if (userEmailFilter) formData.append('user_email_filter', userEmailFilter);
+      formData.append('batch_size', '10000');
+      formData.append('throttle_ms', throttleMs);
+      formData.append('max_retries', maxRetries);
+
+      // Use fetch to POST + stream SSE (EventSource can’t send POST bodies)
+      fetch('/export_emails_daily_sse', { method: 'POST', body: formData })
+        .then(response => {
+          if (!response.ok) throw new Error('Server returned ' + response.status);
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let buffer = '';
+
+          function handleEvent(event, payload) {
+            const ts = new Date().toISOString().replace('T',' ').replace('Z','');
+            if (event === 'start') {
+              log.textContent += `[${ts}] started; range ${payload.range[0]} → ${payload.range[1]}, batch=${payload.batch_size}, throttle=${payload.throttle_ms}ms\n`;
+            } else if (event === 'part') {
+              log.textContent += `[${ts}] ${payload.day}  part ${payload.part || '?'}  rows=${payload.rows}  ${payload.slice[0]} → ${payload.slice[1]}${payload.file ? '  → '+payload.file : ''}\n`;
+            } else if (event === 'warn') {
+              log.textContent += `[${ts}] WARN  ${payload.day}  ${payload.slice[0]} → ${payload.slice[1]}  ${payload.message}\n`;
+            } else if (event === 'error') {
+              log.textContent += `[${ts}] ERROR ${payload.message}\n`;
+            } else if (event === 'done') {
+              if (payload.zip) {
+                log.textContent += `[${ts}] DONE  parts=${payload.parts}  rows≈${payload.rows}\n`;
+                const a = document.createElement('a');
+                a.href = payload.zip; a.textContent = 'Download ZIP'; a.download = '';
+                linkBox.innerHTML = ''; linkBox.appendChild(a);
+              } else {
+                log.textContent += `[${ts}] DONE (no file)\n`;
+              }
+            } else {
+              log.textContent += `[${ts}] ${event}: ${JSON.stringify(payload)}\n`;
+            }
+            log.scrollTop = log.scrollHeight;
+          }
+
+          function processChunk(value) {
+            buffer += value;
+            let idx;
+            while ((idx = buffer.indexOf('\n\n')) >= 0) {
+              const raw = buffer.slice(0, idx).trim();
+              buffer = buffer.slice(idx + 2);
+              if (!raw) continue;
+              const lines = raw.split('\n');
+              let event = 'message', data = '';
+              for (const line of lines) {
+                if (line.startsWith('event:')) event = line.slice(6).trim();
+                if (line.startsWith('data:'))  data += line.slice(5).trim();
+              }
+              try { handleEvent(event, data ? JSON.parse(data) : {}); } catch {}
+            }
+          }
+
+          function pump() {
+            return reader.read().then(({done, value}) => {
+              if (done) return;
+              processChunk(decoder.decode(value, {stream: true}));
+              return pump();
+            });
+          }
+          return pump();
+        })
+        .catch(err => {
+          log.textContent += `[error] ${err}\n`;
+          log.scrollTop = log.scrollHeight;
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      checkFormState();
+      checkExportState();
+    });
+  </script>
+</body>
+</html>
