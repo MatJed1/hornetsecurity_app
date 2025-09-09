@@ -64,10 +64,12 @@ def parse_iso_z(dt_str: str) -> datetime:
     except Exception:
         return datetime.fromisoformat(dt_str.split('T')[0]).replace(tzinfo=timezone.utc)
 
-def fmt_iso_z(dt: datetime) -> str:
+def fmt_iso_local(dt: datetime) -> str:
+    tz = timezone(timedelta(hours=8))
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+    local_dt = dt.astimezone(tz).replace(microsecond=0)
+    return local_dt.isoformat()   # e.g. 2025-09-09T21:30:00+08:00
 
 # ---------------------- Object ID ----------------------
 @app.route('/get_object_id', methods=['POST'])
