@@ -190,8 +190,8 @@ def export_emails_daily_sse():
     clean_user = (user_email_filter or user_email or 'all').replace('@','_at_').replace('.','_')
     from_clean = date_from.split('T')[0]
     to_clean = date_to.split('T')[0]
-    job_id = f"{clean_user}_{from_clean}_{to_clean}_{int(time.time())}"
-    zip_name = f'email_exports_daily_{job_id}.zip'
+    job_id = f"{clean_user}_{from_clean}_{to_clean}"
+    zip_name = f'email_exports_daily_{job_id}.zip'  
     zip_path = os.path.join(EXPORT_DIR, zip_name)
 
     base_payload = {
